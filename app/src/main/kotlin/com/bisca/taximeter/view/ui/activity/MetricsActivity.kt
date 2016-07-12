@@ -2,6 +2,7 @@ package com.bisca.taximeter.view.ui.activity
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -51,13 +52,25 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   }
 
   private fun startMetricsService() {
-    startService(MetricsService.getIntent(this))
+    if (checkPermission()) {
+      startService(MetricsService.getIntent(this))
+    }
   }
 
-  private fun checkPermission() {
+  private fun checkPermission(): Boolean {
     if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
         != PackageManager.PERMISSION_GRANTED) {
       ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_FINE_LOCATION)
+      return false
+    }
+
+    return true
+  }
+
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    if (requestCode == REQUEST_FINE_LOCATION && resultCode == RESULT_OK) {
+      startMetricsService()
     }
   }
 

@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
+import android.support.v4.app.NotificationCompat
+import android.util.Log
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.location.LocationListener
@@ -30,11 +32,15 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
     super.onCreate()
     googleApiClient = initGoogleApiClient()
     googleApiClient.connect()
+
+    showRunningNotification()
   }
 
   override fun onDestroy() {
     super.onDestroy()
     googleApiClient.disconnect()
+
+    removeRunningNotification()
   }
 
   override fun onBind(intent: Intent?) = binder
@@ -58,7 +64,9 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
   }
 
   override fun onLocationChanged(location: Location?) {
-
+    location?.let {
+      Log.d(TAG, "${location.toString()} Speed ${location.speed}")
+    }
   }
 
   private fun initGoogleApiClient() : GoogleApiClient {
@@ -69,5 +77,21 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
         .build()
   }
 
+  private fun showRunningNotification() {
+    val notification = NotificationCompat.Builder(this)
+        .setAutoCancel(false)
+        .setContentTitle("Taximeter Running")
+        .build()
+
+    startForeground(1, notification)
+  }
+
+  private fun removeRunningNotification() {
+    stopForeground(true)
+  }
+
   inner class Binder : android.os.Binder()
 }
+
+val Any.TAG : String
+  get() = javaClass.simpleName
