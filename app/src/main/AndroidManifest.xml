@@ -3,9 +3,17 @@
 
   <application android:allowBackup="true"
                android:label="@string/app_name"
+               android:name=".view.App"
                android:icon="@mipmap/ic_launcher"
                android:supportsRtl="true"
                android:theme="@style/AppTheme">
+
+    <activity android:name=".view.ui.MetricsActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
 
   </application>
 
