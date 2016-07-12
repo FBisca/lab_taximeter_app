@@ -4,6 +4,7 @@ buildscript {
     ext {
         kotlin_version = "1.0.3"
         support_libs_version = "24.0.0"
+        play_services_version = "9.2.1"
     }
 
     repositories {
