@@ -1,4 +1,4 @@
-package com.bisca.taximeter.view.ui.base
+package com.bisca.taximeter.view.ui.activity.base
 
 import android.support.v7.app.AppCompatActivity
 
