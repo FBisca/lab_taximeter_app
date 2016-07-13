@@ -9,8 +9,6 @@ import android.location.Location
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.NotificationCompat
-import android.util.Log
-import com.bisca.taximeter.extensions.TAG
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.location.LocationListener
@@ -26,15 +24,27 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
   }
 
   val binder = Binder()
+  val registeredCallbacks = mutableListOf<Callback>()
+  var state = State.NONE
 
   lateinit var googleApiClient: GoogleApiClient
 
   override fun onCreate() {
     super.onCreate()
     googleApiClient = initGoogleApiClient()
-    googleApiClient.connect()
+  }
+
+  override fun onBind(intent: Intent?) = binder
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (!googleApiClient.isConnected && !googleApiClient.isConnecting) {
+      googleApiClient.connect()
+    } else {
+      requestLocations()
+    }
 
     showRunningNotification()
+    return START_STICKY
   }
 
   override fun onDestroy() {
@@ -44,38 +54,55 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
     removeRunningNotification()
   }
 
-  override fun onBind(intent: Intent?) = binder
-
-  override fun onConnectionFailed(result: ConnectionResult) {
+  override fun onConnected(connectionHint: Bundle?) {
+    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+      registeredCallbacks.forEach {
+        it.onLocationPermissionNeeded()
+      }
+    } else {
+      requestLocations()
+    }
   }
 
-  override fun onConnected(connectionHint: Bundle?) {
-    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-      val request = LocationRequest.create()
-          .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-          .setInterval(5000)
-          .setSmallestDisplacement(10f)
-
-      LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, request, this)
+  override fun onConnectionFailed(result: ConnectionResult) {
+    registeredCallbacks.forEach {
+      it.onPlayServicesConnectionFailed(result)
     }
   }
 
   override fun onConnectionSuspended(cause: Int) {
-
+    registeredCallbacks.forEach {
+      it.onPlayServicesConnectionSuspended(cause)
+    }
   }
 
   override fun onLocationChanged(location: Location?) {
     location?.let {
-      Log.d(TAG, "${location.toString()} Speed ${location.speed}")
+      if (location.speed > 0) {
+        state = State.MOVING
+        location.
+      } else {
+        state = State.STOPPED
+      }
     }
   }
 
-  private fun initGoogleApiClient() : GoogleApiClient {
+  private fun initGoogleApiClient(): GoogleApiClient {
     return GoogleApiClient.Builder(this)
         .addApi(LocationServices.API)
         .addConnectionCallbacks(this)
         .addOnConnectionFailedListener(this)
         .build()
+  }
+
+  private fun requestLocations() {
+    LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this)
+
+    val locationRequest = LocationRequest.create()
+        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+        .setInterval(5000)
+        .setSmallestDisplacement(10f)
+    LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, this)
   }
 
   private fun showRunningNotification() {
@@ -91,5 +118,25 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
     stopForeground(true)
   }
 
-  inner class Binder : android.os.Binder()
+  inner class Binder : android.os.Binder() {
+    fun registerForCallbacks(callback: Callback) {
+      if (!registeredCallbacks.contains(callback)) {
+        registeredCallbacks.add(callback)
+      }
+    }
+
+    fun unregisterForCallbacks(callback: Callback) {
+      registeredCallbacks.remove(callback)
+    }
+  }
+
+  interface Callback {
+    fun onLocationPermissionNeeded()
+    fun onPlayServicesConnectionSuspended(cause: Int)
+    fun onPlayServicesConnectionFailed(result: ConnectionResult)
+  }
+
+  enum class State {
+    NONE, STOPPED, MOVING
+  }
 }
