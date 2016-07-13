@@ -26,12 +26,20 @@ android {
     }
 }
 
+kapt {
+    generateStubs = true
+}
+
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     compile "com.android.support:appcompat-v7:$support_libs_version"
     compile "com.google.android.gms:play-services-location:$play_services_version"
+    compile "com.google.dagger:dagger:$dagger_version"
     compile "io.reactivex:rxjava:$rxjava_version"
+
+    kapt "com.google.dagger:dagger-compiler:$dagger_version"
+    provided "javax.annotation:jsr250-api:$javax_annotation_version"
 
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'

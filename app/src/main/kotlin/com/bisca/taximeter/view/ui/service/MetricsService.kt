@@ -14,6 +14,7 @@ import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.location.LocationListener
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
+import javax.inject.Inject
 
 class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
@@ -27,6 +28,7 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
   val registeredCallbacks = mutableListOf<Callback>()
   var state = State.NONE
 
+  @Inject
   lateinit var googleApiClient: GoogleApiClient
 
   override fun onCreate() {
@@ -80,7 +82,7 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
     location?.let {
       if (location.speed > 0) {
         state = State.MOVING
-        location.
+
       } else {
         state = State.STOPPED
       }
