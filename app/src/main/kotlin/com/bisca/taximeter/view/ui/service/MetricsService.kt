@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.NotificationCompat
 import android.util.Log
+import com.bisca.taximeter.extensions.TAG
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.location.LocationListener
@@ -92,6 +93,3 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
 
   inner class Binder : android.os.Binder()
 }
-
-val Any.TAG : String
-  get() = javaClass.simpleName
