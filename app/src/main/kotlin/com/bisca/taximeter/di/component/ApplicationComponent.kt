@@ -3,7 +3,7 @@ package com.bisca.taximeter.di.component
 import android.content.Context
 import com.bisca.taximeter.di.module.AndroidModule
 import com.bisca.taximeter.di.module.GoogleModule
-import com.google.android.gms.common.api.GoogleApiClient
+import com.bisca.taximeter.view.ui.LocationManager
 import dagger.Component
 import javax.inject.Singleton
 
@@ -16,5 +16,5 @@ import javax.inject.Singleton
 )
 interface ApplicationComponent {
   fun applicationContext(): Context
-  fun googleApiClient(): GoogleApiClient
+  fun locationManager(): LocationManager
 }

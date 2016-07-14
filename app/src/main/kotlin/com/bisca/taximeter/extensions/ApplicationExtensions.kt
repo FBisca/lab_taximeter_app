@@ -8,7 +8,7 @@ import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
 
 fun Application.getComponent(): ApplicationComponent {
-  return (this as App).getComponent()
+  return (this as App).component
 }
 
 fun GoogleApiClient.registerConnectionCallbacks(

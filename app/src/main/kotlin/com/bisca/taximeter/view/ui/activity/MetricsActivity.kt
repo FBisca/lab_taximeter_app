@@ -1,43 +1,39 @@
 package com.bisca.taximeter.view.ui.activity
 
-import android.Manifest
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
-import android.support.v4.app.ActivityCompat
 import android.widget.Button
 import android.widget.TextView
 import com.bisca.taximeter.R
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.getComponent
+import com.bisca.taximeter.view.ui.LocationManager
 import com.bisca.taximeter.view.ui.activity.base.BaseActivity
 import com.bisca.taximeter.view.ui.service.MetricsService
-import com.bisca.taximeter.extensions.registerConnectionCallbacks
-import com.bisca.taximeter.extensions.registerConnectionFailedCallback
-import com.google.android.gms.common.api.GoogleApiClient
+import rx.Subscription
+import rx.android.schedulers.AndroidSchedulers
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class MetricsActivity : BaseActivity(), ServiceConnection {
 
   companion object {
-    const val REQUEST_FINE_LOCATION = 1
-    const val REQUEST_PLAY_SERVICES_SOLUTION = 2
+    const val REQUEST_LOCATION_SOLUTION = 1
+    val TAXIMETER_INTERVAL = 10L to TimeUnit.SECONDS
   }
 
   @Inject
-  lateinit var googleApiClient: GoogleApiClient
+  lateinit var locationManager: LocationManager
 
   val labelStatus by lazy { findViewById(R.id.labelStatus) as TextView }
   val buttonStart by lazy { findViewById(R.id.buttonStart) as Button }
 
-  var googleApiConnectionCallback: GoogleApiClient.ConnectionCallbacks? = null
-  var googleApiConnectionFailedCallback: GoogleApiClient.OnConnectionFailedListener? = null
   var metricsBinder: MetricsService.Binder? = null
-
+  var locationManagerSubscription: Subscription? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -45,24 +41,8 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
     initInjection()
     initActivity()
-    initGoogleApi()
-  }
 
-  private fun initGoogleApi() {
-    googleApiConnectionCallback = googleApiClient.registerConnectionCallbacks(
-        { connectionHint ->
-          startMetricsService()
-        }
-    )
-
-    googleApiConnectionFailedCallback = googleApiClient.registerConnectionFailedCallback {
-
-    }
-  }
-
-  private fun releaseGoogleApi() {
-    googleApiConnectionCallback?.let { googleApiClient.unregisterConnectionCallbacks(it) }
-    googleApiConnectionFailedCallback?.let { googleApiClient.unregisterConnectionFailedListener(it) }
+    bindService(MetricsService.getIntent(this), this, 0)
   }
 
   private fun initInjection() {
@@ -75,17 +55,31 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   override fun onDestroy() {
     super.onDestroy()
     unregisterService()
-    releaseGoogleApi()
   }
 
-  private fun unregisterService() {
-    metricsBinder?.let {
-      unbindService(this)
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    if (resultCode == Activity.RESULT_OK && requestCode == REQUEST_LOCATION_SOLUTION) {
+      startMetricsService()
     }
   }
 
   override fun onServiceConnected(componentName: ComponentName?, binder: IBinder?) {
     metricsBinder = binder as MetricsService.Binder?
+    metricsBinder?.let {
+      if (it.isRunningRide()) {
+        connectToTaximeterStream(it)
+      }
+    }
+  }
+
+  private fun connectToTaximeterStream(binder: MetricsService.Binder) {
+    val (interval, timeUnit) = TAXIMETER_INTERVAL
+    binder.getTaximeterStream(interval, timeUnit)
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe { ride ->
+      labelStatus.text = "Taximeter: ${ride.taximeter}"
+    }
   }
 
   override fun onServiceDisconnected(componentName: ComponentName?) {
@@ -93,36 +87,36 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   }
 
   private fun initActivity() {
-    bindService(MetricsService.getIntent(this), this, 0)
-
     buttonStart.setOnClickListener {
-      checkMetricsRequirements()
+     connectToLocations()
     }
   }
 
-  private fun checkMetricsRequirements() {
-    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_FINE_LOCATION)
-    } else if (!googleApiClient.isConnected) {
-      googleApiClient.connect()
-    } else {
-      startMetricsService()
-    }
+  private fun connectToLocations() {
+    locationManagerSubscription = locationManager.stream().first().subscribe(
+        { location ->
+          startMetricsService()
+        },
+        { error ->
+          if (error is LocationManager.LocationManagerException && error.hasSolution()) {
+            error.startActivityForSolution(this, REQUEST_LOCATION_SOLUTION)
+          }
+        }
+    )
   }
 
   private fun startMetricsService() {
     val intent = MetricsService.getIntent(this)
 
-    bindService(intent, this, 0)
     startService(intent)
+
+    bindService(intent, this, 0)
   }
 
-  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-    super.onActivityResult(requestCode, resultCode, data)
-    if (resultCode == Activity.RESULT_OK) {
-      if (requestCode == REQUEST_FINE_LOCATION || requestCode == REQUEST_PLAY_SERVICES_SOLUTION) {
-        startMetricsService()
-      }
+  private fun unregisterService() {
+    locationManagerSubscription?.unsubscribe()
+    metricsBinder?.let {
+      unbindService(this)
     }
   }
 

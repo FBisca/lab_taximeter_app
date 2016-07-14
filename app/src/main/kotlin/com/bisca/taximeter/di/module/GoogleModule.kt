@@ -1,8 +1,7 @@
 package com.bisca.taximeter.di.module
 
 import android.content.Context
-import com.google.android.gms.common.api.GoogleApiClient
-import com.google.android.gms.location.LocationServices
+import com.bisca.taximeter.view.ui.LocationManager
 import dagger.Module
 import dagger.Provides
 import javax.inject.Singleton
@@ -12,9 +11,7 @@ class GoogleModule {
 
   @Provides
   @Singleton
-  fun providesGoogleApiClient(context: Context): GoogleApiClient {
-     return GoogleApiClient.Builder(context)
-         .addApi(LocationServices.API)
-         .build()
+  fun providesLocationManager(context: Context): LocationManager {
+    return LocationManager(context)
   }
 }

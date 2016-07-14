@@ -37,6 +37,7 @@ dependencies {
     compile "com.google.android.gms:play-services-location:$play_services_version"
     compile "com.google.dagger:dagger:$dagger_version"
     compile "io.reactivex:rxjava:$rxjava_version"
+    compile "io.reactivex:rxandroid:$rxandroid_version"
 
     kapt "com.google.dagger:dagger-compiler:$dagger_version"
     provided "javax.annotation:jsr250-api:$javax_annotation_version"

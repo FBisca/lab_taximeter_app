@@ -5,8 +5,8 @@ import android.os.Parcelable
 
 class Ride(
     val taximeter: Double,
-    val totalMeters: Double,
-    val standingMinutes: Double,
+    val totalMeters: Float,
+    val idleSeconds: Long,
     val baseFare: Double,
     val durationInSeconds: Long
 ) : Parcelable {
@@ -14,16 +14,16 @@ class Ride(
   constructor(parcel: Parcel)
   : this(
       parcel.readDouble(),
-      parcel.readDouble(),
-      parcel.readDouble(),
+      parcel.readFloat(),
+      parcel.readLong(),
       parcel.readDouble(),
       parcel.readLong()
   )
 
   override fun writeToParcel(dest: Parcel?, flags: Int) {
     dest?.writeDouble(taximeter)
-    dest?.writeDouble(totalMeters)
-    dest?.writeDouble(standingMinutes)
+    dest?.writeFloat(totalMeters)
+    dest?.writeLong(idleSeconds)
     dest?.writeDouble(baseFare)
     dest?.writeLong(durationInSeconds)
   }

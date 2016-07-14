@@ -1,110 +1,181 @@
 package com.bisca.taximeter.view.ui.service
 
-import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Bundle
-import android.support.v4.app.ActivityCompat
+import android.os.Handler
+import android.os.SystemClock
 import android.support.v4.app.NotificationCompat
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.api.GoogleApiClient
-import com.google.android.gms.location.LocationListener
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
+import android.util.Log
+import com.bisca.taximeter.data.model.Ride
+import com.bisca.taximeter.data.repository.RideRepository
+import com.bisca.taximeter.di.component.DaggerMetricsComponent
+import com.bisca.taximeter.extensions.getComponent
+import com.bisca.taximeter.view.ui.LocationManager
+import rx.Observable
+import rx.Subscription
+import java.util.Date
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 
-class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
+class MetricsService : Service() {
 
   companion object {
+    val TAG: String = MetricsService::class.java.simpleName
+
+    const val INITIAL_POINT = "none"
+
     fun getIntent(context: Context): Intent {
       return Intent(context, MetricsService::class.java)
     }
   }
 
   val binder = Binder()
-  val registeredCallbacks = mutableListOf<Callback>()
-  var state = State.NONE
 
   @Inject
-  lateinit var googleApiClient: GoogleApiClient
+  lateinit var rideRepository: RideRepository
+
+  @Inject
+  lateinit var locationManager: LocationManager
+
+  var runningRide: Boolean = false
+  val rideMetrics = RideMetrics()
+  val lastPoint = Location(INITIAL_POINT)
+  val handler = Handler()
+
+  var locationsSubscription: Subscription? = null
 
   override fun onCreate() {
     super.onCreate()
-    googleApiClient = initGoogleApiClient()
+    initInjection()
   }
 
   override fun onBind(intent: Intent?) = binder
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    if (!googleApiClient.isConnected && !googleApiClient.isConnecting) {
-      googleApiClient.connect()
-    } else {
-      requestLocations()
+    if (!runningRide) {
+      showRunningNotification()
+      startListeningForLocations()
+
+      runningRide = true
     }
 
-    showRunningNotification()
     return START_STICKY
   }
 
   override fun onDestroy() {
     super.onDestroy()
-    googleApiClient.disconnect()
-
     removeRunningNotification()
+    stopListeningForLocations()
   }
 
-  override fun onConnected(connectionHint: Bundle?) {
-    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-      registeredCallbacks.forEach {
-        it.onLocationPermissionNeeded()
-      }
-    } else {
-      requestLocations()
-    }
-  }
-
-  override fun onConnectionFailed(result: ConnectionResult) {
-    registeredCallbacks.forEach {
-      it.onPlayServicesConnectionFailed(result)
-    }
-  }
-
-  override fun onConnectionSuspended(cause: Int) {
-    registeredCallbacks.forEach {
-      it.onPlayServicesConnectionSuspended(cause)
-    }
-  }
-
-  override fun onLocationChanged(location: Location?) {
-    location?.let {
-      if (location.speed > 0) {
-        state = State.MOVING
-
-      } else {
-        state = State.STOPPED
-      }
-    }
-  }
-
-  private fun initGoogleApiClient(): GoogleApiClient {
-    return GoogleApiClient.Builder(this)
-        .addApi(LocationServices.API)
-        .addConnectionCallbacks(this)
-        .addOnConnectionFailedListener(this)
+  private fun initInjection() {
+    DaggerMetricsComponent.builder()
+        .applicationComponent(application.getComponent())
         .build()
+        .inject(this)
   }
 
-  private fun requestLocations() {
-    LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this)
+  private fun startListeningForLocations() {
+    locationsSubscription = locationManager.stream()
+        .retry()
+        .subscribe { location ->
+          locationReceived(location)
+        }
+  }
 
-    val locationRequest = LocationRequest.create()
-        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-        .setInterval(5000)
-        .setSmallestDisplacement(10f)
-    LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, this)
+  private fun stopListeningForLocations() {
+    locationsSubscription?.unsubscribe()
+  }
+
+  private fun locationReceived(location: Location) {
+    Log.d(TAG, location.toString())
+
+    if (filterLocation(location)) {
+      if (location.hasSpeed() && location.speed > 0f) {
+        userMoved(location)
+      } else {
+        userStopped()
+      }
+    }
+
+    lastPoint.set(location)
+    startHandler()
+  }
+
+  private fun startHandler() {
+    handler.removeCallbacksAndMessages(null)
+    handler.postDelayed({
+      Log.d(TAG, "Handler Fired")
+      if (!rideMetrics.hasBecomeIdle()) {
+        userStopped()
+      }
+    }, 5000)
+  }
+
+  private fun userStopped() {
+    Log.d(TAG, "User started idle")
+
+    rideMetrics.startedIdle(SystemClock.elapsedRealtime())
+  }
+
+  private fun userMoved(location: Location) {
+    Log.d(TAG, "User started moving")
+
+    if (rideMetrics.hasBecomeIdle()) {
+      computeIdleTime()
+      stopIdlingTime()
+    }
+
+    computeDistance(location)
+  }
+
+  private fun computeDistance(location: Location) {
+    val currentMeters = rideMetrics.meters.get()
+
+    val newDistance = lastPoint.distanceTo(location)
+    val computedDistance = newDistance.plus(currentMeters)
+
+    rideMetrics.meters.set(computedDistance)
+
+    Log.d(TAG, "Computed Distance $computedDistance")
+  }
+
+  private fun computeIdleTime() {
+    val currentIdleSeconds = rideMetrics.idleSeconds.get()
+
+    val currentTime = SystemClock.elapsedRealtime()
+    val newIdleTime = currentTime.minus(rideMetrics.idleStartedTime.getAndSet(currentTime))
+    val newIdleSeconds = newIdleTime.div(1000) // To Seconds
+
+    val computedIdleSeconds = currentIdleSeconds.plus(newIdleSeconds)
+    rideMetrics.idleSeconds.set(currentIdleSeconds)
+
+    Log.d(TAG, "Computed Idle Seconds $computedIdleSeconds")
+  }
+
+  private fun stopIdlingTime() {
+    rideMetrics.stopIdle()
+  }
+
+  private fun filterLocation(location: Location): Boolean {
+    if (lastPoint.provider.equals(INITIAL_POINT)) {
+      return true
+    }
+
+    if (location.distanceTo(lastPoint) < 20) {
+      return true
+    }
+
+    if (location.hasAccuracy() && location.accuracy < 100) {
+      return true
+    }
+
+    return false
   }
 
   private fun showRunningNotification() {
@@ -121,24 +192,39 @@ class MetricsService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApi
   }
 
   inner class Binder : android.os.Binder() {
-    fun registerForCallbacks(callback: Callback) {
-      if (!registeredCallbacks.contains(callback)) {
-        registeredCallbacks.add(callback)
-      }
-    }
 
-    fun unregisterForCallbacks(callback: Callback) {
-      registeredCallbacks.remove(callback)
+    fun isRunningRide() = runningRide
+
+    fun getTaximeterStream(interval: Long, timeUnit: TimeUnit): Observable<Ride> {
+      return Observable.interval(0L, interval, timeUnit)
+          .onBackpressureLatest()
+          .map {
+            if (rideMetrics.hasBecomeIdle()) {
+              computeIdleTime()
+            }
+
+            rideRepository.calculateRide(Date(), rideMetrics.meters.get(), rideMetrics.idleSeconds.get())
+          }
     }
   }
 
-  interface Callback {
-    fun onLocationPermissionNeeded()
-    fun onPlayServicesConnectionSuspended(cause: Int)
-    fun onPlayServicesConnectionFailed(result: ConnectionResult)
-  }
+  class RideMetrics() {
+    val idleStartedTime = AtomicLong(0)
+    val meters = AtomicReference<Float>(0F)
+    val idleSeconds = AtomicLong(0)
+    private val becomeIdle = AtomicBoolean()
 
-  enum class State {
-    NONE, STOPPED, MOVING
+    fun startedIdle(time: Long) {
+      becomeIdle.set(true)
+      idleStartedTime.set(time)
+    }
+
+    fun stopIdle() {
+      becomeIdle.set(false)
+      idleStartedTime.set(0)
+    }
+
+    fun hasBecomeIdle() = becomeIdle.get()
+
   }
 }
