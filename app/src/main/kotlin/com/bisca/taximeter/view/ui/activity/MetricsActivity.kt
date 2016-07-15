@@ -132,8 +132,12 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
               val minutes = (seconds / 60) % 60
               val hours = (seconds / 60) / 60
-
-              textTime.text = String.format("%s:%s", format.format(hours), format.format(minutes))
+              if (hours == 0L) {
+                val currentSeconds = seconds % 60
+                textTime.text = String.format("%s:%s", format.format(minutes), format.format(currentSeconds))
+              } else {
+                textTime.text = String.format("%s:%s", format.format(hours), format.format(minutes))
+              }
             }
     )
   }

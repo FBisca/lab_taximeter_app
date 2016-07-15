@@ -106,8 +106,9 @@ class MetricsService : Service() {
 
   private fun locationReceived(location: Location) {
     if (filterLocation(location)) {
-      if (location.hasSpeed() && location.speed > 0f) {
-        userMoved(location)
+      val distanceMoved = location.distanceTo(lastPoint)
+      if (checkIfUserIsMoving(distanceMoved, location, lastPoint)) {
+        userMoved(distanceMoved, location)
       } else {
         userStopped()
       }
@@ -116,9 +117,24 @@ class MetricsService : Service() {
     lastPoint.set(location)
   }
 
+  private fun checkIfUserIsMoving(distanceMoved: Float, newLocation: Location, compareLocation: Location): Boolean {
+    if (newLocation.hasSpeed() && newLocation.speed > 0f) {
+      return true
+    }
+
+    val diffTime = newLocation.time - compareLocation.time
+    if (diffTime > 0) {
+      val metersPerSeconds = distanceMoved / (diffTime / 1000)
+      if (metersPerSeconds > 5) {
+        newLocation.speed = metersPerSeconds
+      }
+    }
+
+    return false
+  }
+
   private fun startIdleChecker(expectedSecondsToNextPosition: Int) {
     Log.d(TAG, "Expected Position in $expectedSecondsToNextPosition seconds")
-
     handler.removeCallbacksAndMessages(null)
     handler.postDelayed({
       if (!rideMetrics.hasBecomeIdle()) {
@@ -135,7 +151,7 @@ class MetricsService : Service() {
     speedSubject.onNext(0f)
   }
 
-  private fun userMoved(location: Location) {
+  private fun userMoved(distanceMoved: Float, location: Location) {
     Log.d(TAG, "User is moving ${location.speed}m/s")
 
     if (rideMetrics.hasBecomeIdle()) {
@@ -143,7 +159,7 @@ class MetricsService : Service() {
       stopIdlingTime()
     }
 
-    computeDistance(location)
+    computeDistance(distanceMoved)
 
     val timeToNextPosition = (locationManager.locationRequest.smallestDisplacement / location.speed) * 4
 
@@ -153,15 +169,14 @@ class MetricsService : Service() {
     speedSubject.onNext(kilometerPerHour.toFloat())
   }
 
-  private fun computeDistance(location: Location) {
+  private fun computeDistance(distanceMoved: Float) {
     if (lastPoint.provider.equals(INITIAL_POINT)) {
       return
     }
 
     val currentMeters = rideMetrics.meters.get()
 
-    val newDistance = lastPoint.distanceTo(location)
-    val computedDistance = newDistance.plus(currentMeters)
+    val computedDistance = distanceMoved.plus(currentMeters)
 
     rideMetrics.meters.set(computedDistance)
 
@@ -190,11 +205,7 @@ class MetricsService : Service() {
       return true
     }
 
-    if (location.distanceTo(lastPoint) < 20) {
-      return true
-    }
-
-    if (location.hasAccuracy() && location.accuracy < 100) {
+    if (location.distanceTo(lastPoint) < 100) {
       return true
     }
 
@@ -258,7 +269,7 @@ class MetricsService : Service() {
     }
 
     fun getTimeStream(): Observable<Long> {
-      return Observable.interval(0, 60L, TimeUnit.SECONDS)
+      return Observable.interval(0, 1L, TimeUnit.SECONDS)
         .onBackpressureLatest()
         .map {
           System.currentTimeMillis() - initialDate
