@@ -1,24 +1,181 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools"
-              android:orientation="vertical"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:gravity="center">
+              android:gravity="center_horizontal"
+              android:orientation="vertical">
 
-  <TextView
-      android:id="@+id/labelStatus"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:textAppearance="@style/TextAppearance.AppCompat.Title"
-      tools:text="Status"/>
+    <com.bisca.taximeter.view.ui.widget.DigitalTextView
+        android:id="@+id/textStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="DISPONIVEL"
+        android:textColor="@color/greenLed"
+        android:textSize="32sp"/>
 
-  <Button
-      android:id="@+id/buttonStart"
-      style="@style/Widget.AppCompat.Button.Colored"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
-      android:text="@android:string/ok"/>
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_taximeter_box"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="40dp"
+                android:layout_marginLeft="48dp"
+                android:layout_marginRight="40dp"
+                android:layout_marginStart="48dp"
+                android:paddingTop="16dp">
+
+                <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                    style="@style/DigitalText.Mark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.3"
+                    android:text="00:00"
+                    android:textSize="42sp"/>
+
+                <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                    android:id="@+id/textTime"
+                    style="@style/DigitalText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:text="00:00"
+                    android:textSize="42sp"/>
+
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="@android:color/black"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:text="TEMPO"
+                android:textAllCaps="true"
+                android:textAppearance="@style/TextAppearance.AppCompat.Subhead"
+                android:textColor="@android:color/darker_gray"/>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/infoBox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="-16dp"
+            android:layout_marginStart="-16dp"
+            android:background="@drawable/bg_taximeter_box"
+            android:orientation="vertical">
+
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="40dp"
+                android:layout_marginLeft="48dp"
+                android:layout_marginRight="40dp"
+                android:layout_marginStart="48dp"
+                android:paddingTop="16dp">
+
+                <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                    style="@style/DigitalText.Mark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.3"
+                    android:text="000"
+                    android:textSize="42sp"/>
+
+                <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                    android:id="@+id/textSpeed"
+                    style="@style/DigitalText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:text="00"
+                    android:textSize="42sp"/>
+
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="@android:color/black"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:text="KM/HORA"
+                android:textAllCaps="true"
+                android:textAppearance="@style/TextAppearance.AppCompat.Subhead"
+                android:textColor="@android:color/darker_gray"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_taximeter_box"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="40dp"
+            android:layout_marginRight="40dp"
+            android:paddingTop="16dp">
+
+            <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                style="@style/DigitalText.Mark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:alpha="0.3"
+                android:text="000.00"
+                android:textSize="72sp"/>
+
+            <com.bisca.taximeter.view.ui.widget.DigitalTextView
+                android:id="@+id/textValue"
+                style="@style/DigitalText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:text="00.00"
+                android:textSize="72sp"/>
+
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@android:color/black"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:text="preço a pagar"
+            android:textAllCaps="true"
+            android:textAppearance="@style/TextAppearance.AppCompat.Subhead"
+            android:textColor="@android:color/darker_gray"/>
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/buttonAction"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginTop="16dp"
+        android:src="@drawable/ic_fingerprint_black_24dp"
+        android:background="@drawable/bg_button"
+        android:scaleType="center"
+        tools:tint="@color/greenLed"/>
 
 </LinearLayout>
