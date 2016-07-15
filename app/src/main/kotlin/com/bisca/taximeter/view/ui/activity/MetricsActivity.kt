@@ -128,9 +128,10 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
         binder.getTimeStream()
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe { millisecondsPassed ->
-              val seconds = millisecondsPassed.div(1000)
-              val minutes = seconds.div(60)
-              val hours = minutes.div(60)
+              val seconds = millisecondsPassed / 1000
+
+              val minutes = (seconds / 60) % 60
+              val hours = (seconds / 60) / 60
 
               textTime.text = String.format("%s:%s", format.format(hours), format.format(minutes))
             }

@@ -1,5 +1,6 @@
 package com.bisca.taximeter.view.ui.service
 
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,6 +14,7 @@ import com.bisca.taximeter.data.repository.RideRepository
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.getComponent
 import com.bisca.taximeter.view.ui.LocationManager
+import com.bisca.taximeter.view.ui.activity.MetricsActivity
 import rx.Observable
 import rx.Subscription
 import rx.subjects.PublishSubject
@@ -200,8 +202,11 @@ class MetricsService : Service() {
   }
 
   private fun showRunningNotification() {
+    val intent = Intent(this, MetricsActivity::class.java)
+    val pendingIntent = PendingIntent.getActivity(this, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+
     val notification = NotificationCompat.Builder(this)
-        .setAutoCancel(false)
+        .setContentIntent(pendingIntent)
         .setContentTitle("Taximeter Running")
         .build()
 
