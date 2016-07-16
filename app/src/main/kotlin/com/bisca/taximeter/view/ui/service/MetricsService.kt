@@ -53,6 +53,10 @@ class MetricsService : Service() {
 
   override fun onBind(intent: Intent?) = binder
 
+  override fun onUnbind(intent: Intent?): Boolean {
+    return super.onUnbind(intent)
+  }
+
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (rideMetrics.getState() == RideState.FOR_HIRE) {
 
@@ -226,19 +230,16 @@ class MetricsService : Service() {
 
   inner class Binder : android.os.Binder() {
 
-    @Suppress("NON_EXHAUSTIVE_WHEN")
-    fun nextState() {
-      when (rideMetrics.getState()) {
-        RideState.HIRED -> {
-          rideMetrics.stopped()
-          stopListeningForLocations()
-          stopListeningForTimeTicks()
-        }
+    fun getState() = rideMetrics.getState()
 
-        RideState.STOPPED -> {
-          stopSelf()
-        }
-      }
+    fun stop() {
+      rideMetrics.stopped()
+      stopListeningForLocations()
+      stopListeningForTimeTicks()
+    }
+
+    fun finish() {
+      stopSelf()
     }
 
     fun getRideMetricsStream(): Observable<RideMetrics> {

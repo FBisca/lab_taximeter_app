@@ -12,7 +12,7 @@ import com.google.android.gms.location.*
 import rx.Observable
 import rx.subjects.BehaviorSubject
 
-class LocationManager(private val context: Context) {
+class LocationManager(val context: Context) {
 
   private var locationSubject: BehaviorSubject<Location> = BehaviorSubject.create()
 

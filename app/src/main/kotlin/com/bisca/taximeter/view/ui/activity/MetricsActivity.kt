@@ -12,12 +12,14 @@ import android.widget.ImageView
 import android.widget.TextView
 import com.bisca.taximeter.R
 import com.bisca.taximeter.data.model.RideState
+import com.bisca.taximeter.data.model.UserLocation
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.getComponent
 import com.bisca.taximeter.view.ui.activity.base.BaseActivity
 import com.bisca.taximeter.view.ui.location.LocationManager
 import com.bisca.taximeter.view.ui.location.LocationManagerException
 import com.bisca.taximeter.view.ui.service.MetricsService
+import com.bisca.taximeter.view.ui.widget.SignalView
 import rx.android.schedulers.AndroidSchedulers
 import rx.subscriptions.CompositeSubscription
 import java.text.NumberFormat
@@ -34,6 +36,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   @Inject
   lateinit var locationManager: LocationManager
 
+  val signalView by lazy { findViewById(R.id.signalView) as SignalView }
   val textStatus by lazy { findViewById(R.id.textStatus) as TextView }
   val textTime by lazy { findViewById(R.id.textTime) as TextView }
   val textSpeed by lazy { findViewById(R.id.textSpeed) as TextView }
@@ -42,6 +45,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
 
   var metricsBinder: MetricsService.Binder? = null
+  var serviceBound = false
   var compositeSubscription: CompositeSubscription = CompositeSubscription()
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,6 +78,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   }
 
   override fun onServiceConnected(componentName: ComponentName?, binder: IBinder?) {
+    serviceBound = true
     metricsBinder = binder as MetricsService.Binder?
     metricsBinder?.let {
 
@@ -83,26 +88,42 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
               .subscribe { rideMetrics ->
                 displaySpeed(rideMetrics.kilometersPerHour.get())
                 displayTime(rideMetrics.durationInSeconds.get())
+                displaySignal(rideMetrics.route.lastOrNull())
               }
       )
 
       val (interval, timeUnit) = TAXIMETER_INTERVAL
       compositeSubscription.add(
           it.getTaximeterStream(interval, timeUnit)
-          .observeOn(AndroidSchedulers.mainThread())
-          .subscribe { taximeter ->
-            displayTaximeter(taximeter)
-          }
+              .observeOn(AndroidSchedulers.mainThread())
+              .subscribe { taximeter ->
+                displayTaximeter(taximeter)
+              }
       )
+    }
+  }
+
+  override fun onServiceDisconnected(componentName: ComponentName?) {
+    metricsBinder = null
+    serviceBound = false
+  }
+
+  private fun displaySignal(userLocation: UserLocation?) {
+    if (userLocation == null) {
+      signalView.setSignalPercentage(20)
+    } else {
+      val accuracy = userLocation.accuracy
+      val percentage = if (accuracy > 200 || accuracy <= 0) {
+        20f
+      } else {
+        (100 * (200 - accuracy)) / 200
+      }
+      signalView.setSignalPercentage(percentage.toInt())
     }
   }
 
   private fun displaySpeed(kilometersPerHour: Float) {
     textSpeed.text = String.format("%d", kilometersPerHour.toInt())
-  }
-
-  override fun onServiceDisconnected(componentName: ComponentName?) {
-
   }
 
   private fun displayState(state: RideState) {
@@ -151,7 +172,28 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
     DrawableCompat.setTint(drawable, ContextCompat.getColor(this, R.color.greenLed))
 
     buttonAction.setOnClickListener {
-      connectToLocations()
+      buttonActionClicked()
+    }
+  }
+
+  private fun buttonActionClicked() {
+    metricsBinder.let {
+      if (it == null) {
+        connectToLocations()
+      } else {
+        val state = it.getState()
+
+        if (state == RideState.HIRED) {
+          it.stop()
+          displayState(RideState.STOPPED)
+        }
+
+        if (state == RideState.STOPPED) {
+          it.finish()
+          displayState(RideState.FOR_HIRE)
+          unsubscribeAll()
+        }
+      }
     }
   }
 
@@ -176,16 +218,19 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
     val intent = MetricsService.getIntent(this)
 
     startService(intent)
-
     bindService(intent, this, 0)
   }
 
   private fun unregisterService() {
-    compositeSubscription.clear()
-    metricsBinder?.let {
+    unsubscribeAll()
+    metricsBinder = null
+    if (serviceBound) {
       unbindService(this)
-      metricsBinder = null
     }
+  }
+
+  private fun unsubscribeAll() {
+    compositeSubscription.clear()
   }
 
 }
