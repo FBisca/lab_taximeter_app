@@ -127,6 +127,8 @@ class MetricsService : Service() {
         rideMetrics.appendRoute(userLocation)
       }
     }
+
+    rideMetrics.updateAccuracy(userLocation.accuracy)
   }
 
   private fun convertToUserLocation(location: Location): UserLocation {

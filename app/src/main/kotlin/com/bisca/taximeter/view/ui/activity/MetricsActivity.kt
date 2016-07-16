@@ -8,11 +8,11 @@ import android.os.Bundle
 import android.os.IBinder
 import android.support.v4.content.ContextCompat
 import android.support.v4.graphics.drawable.DrawableCompat
+import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
 import com.bisca.taximeter.R
 import com.bisca.taximeter.data.model.RideState
-import com.bisca.taximeter.data.model.UserLocation
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.getComponent
 import com.bisca.taximeter.view.ui.activity.base.BaseActivity
@@ -30,7 +30,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
   companion object {
     const val REQUEST_LOCATION_SOLUTION = 1
-    val TAXIMETER_INTERVAL = 10L to TimeUnit.SECONDS
+    val TAXIMETER_INTERVAL = 5L to TimeUnit.SECONDS
   }
 
   @Inject
@@ -50,6 +50,10 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    window.setFlags(
+        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+    )
     setContentView(R.layout.activity_metrics)
 
     initInjection()
@@ -88,7 +92,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
               .subscribe { rideMetrics ->
                 displaySpeed(rideMetrics.kilometersPerHour.get())
                 displayTime(rideMetrics.durationInSeconds.get())
-                displaySignal(rideMetrics.route.lastOrNull())
+                displaySignal(rideMetrics.accuracy.get())
               }
       )
 
@@ -108,18 +112,13 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
     serviceBound = false
   }
 
-  private fun displaySignal(userLocation: UserLocation?) {
-    if (userLocation == null) {
-      signalView.setSignalPercentage(20)
+  private fun displaySignal(accuracy: Float) {
+    val percentage = if (accuracy > 200 || accuracy <= 0) {
+      20f
     } else {
-      val accuracy = userLocation.accuracy
-      val percentage = if (accuracy > 200 || accuracy <= 0) {
-        20f
-      } else {
-        (100 * (200 - accuracy)) / 200
-      }
-      signalView.setSignalPercentage(percentage.toInt())
+      (100 * (200 - accuracy)) / 200
     }
+    signalView.setSignalPercentage(percentage.toInt())
   }
 
   private fun displaySpeed(kilometersPerHour: Float) {
@@ -216,6 +215,8 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
 
   private fun startMetricsService() {
     val intent = MetricsService.getIntent(this)
+
+    displayState(RideState.HIRED)
 
     startService(intent)
     bindService(intent, this, 0)

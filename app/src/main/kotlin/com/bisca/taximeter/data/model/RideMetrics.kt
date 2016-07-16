@@ -1,6 +1,5 @@
 package com.bisca.taximeter.data.model
 
-import android.os.SystemClock
 import com.bisca.taximeter.data.logger.Logger
 import com.bisca.taximeter.view.ui.service.MetricsService
 import java.util.concurrent.atomic.AtomicBoolean
@@ -11,6 +10,7 @@ class RideMetrics() {
   var rideState = AtomicReference<RideState>(RideState.FOR_HIRE)
   val meters = AtomicReference<Float>(0F)
   val kilometersPerHour = AtomicReference<Float>(0F)
+  val accuracy = AtomicReference<Float>(0F)
   val idleSeconds = AtomicLong(0)
   val durationInSeconds = AtomicLong(0)
   val route = mutableListOf<UserLocation>()
@@ -51,6 +51,10 @@ class RideMetrics() {
     val currentIdleSeconds = idleSeconds.incrementAndGet()
 
     Logger.debug(MetricsService.TAG, "Computing Idle, total $currentIdleSeconds idle seconds")
+  }
+
+  fun updateAccuracy(accuracy: Float) {
+    this.accuracy.set(accuracy)
   }
 
   fun updateSpeed(speed: Float) {
