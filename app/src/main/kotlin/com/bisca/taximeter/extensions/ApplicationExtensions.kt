@@ -2,6 +2,7 @@ package com.bisca.taximeter.extensions
 
 import android.app.Application
 import android.content.Context
+import android.location.Location
 import android.os.Build
 import android.os.Bundle
 import com.bisca.taximeter.di.component.ApplicationComponent

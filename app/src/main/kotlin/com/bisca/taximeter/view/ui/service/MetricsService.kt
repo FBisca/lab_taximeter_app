@@ -12,6 +12,7 @@ import android.util.Log
 import com.bisca.taximeter.data.model.Ride
 import com.bisca.taximeter.data.repository.RideRepository
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
+import com.bisca.taximeter.extensions.calculateDistance
 import com.bisca.taximeter.extensions.getComponent
 import com.bisca.taximeter.view.ui.LocationManager
 import com.bisca.taximeter.view.ui.activity.MetricsActivity
@@ -105,8 +106,11 @@ class MetricsService : Service() {
   }
 
   private fun locationReceived(location: Location) {
+    Log.d(TAG, "Position Received ${location.toString()}")
+
+    val distanceMoved = calculateDistance(location)
+
     if (filterLocation(location)) {
-      val distanceMoved = location.distanceTo(lastPoint)
       if (checkIfUserIsMoving(distanceMoved, location, lastPoint)) {
         userMoved(distanceMoved, location)
       } else {
@@ -117,16 +121,23 @@ class MetricsService : Service() {
     lastPoint.set(location)
   }
 
-  private fun checkIfUserIsMoving(distanceMoved: Float, newLocation: Location, compareLocation: Location): Boolean {
-    if (newLocation.hasSpeed() && newLocation.speed > 0f) {
+  private fun calculateDistance(location: Location): Double {
+    return when {
+      location.provider.equals(INITIAL_POINT) -> 0.0
+      else -> location.calculateDistance(lastPoint)
+    }
+  }
+
+  private fun checkIfUserIsMoving(distanceMoved: Double, newLocation: Location, compareLocation: Location): Boolean {
+    if (newLocation.hasSpeed() && newLocation.speed > 1f) {
       return true
     }
 
     val diffTime = newLocation.time - compareLocation.time
     if (diffTime > 0) {
       val metersPerSeconds = distanceMoved / (diffTime / 1000)
-      if (metersPerSeconds > 5) {
-        newLocation.speed = metersPerSeconds
+      if (metersPerSeconds > 1f) {
+        newLocation.speed = metersPerSeconds.toFloat()
       }
     }
 
@@ -151,7 +162,7 @@ class MetricsService : Service() {
     speedSubject.onNext(0f)
   }
 
-  private fun userMoved(distanceMoved: Float, location: Location) {
+  private fun userMoved(distanceMoved: Double, location: Location) {
     Log.d(TAG, "User is moving ${location.speed}m/s")
 
     if (rideMetrics.hasBecomeIdle()) {
@@ -159,7 +170,7 @@ class MetricsService : Service() {
       stopIdlingTime()
     }
 
-    computeDistance(distanceMoved)
+    computeDistance(distanceMoved.toFloat())
 
     val timeToNextPosition = (locationManager.locationRequest.smallestDisplacement / location.speed) * 4
 
