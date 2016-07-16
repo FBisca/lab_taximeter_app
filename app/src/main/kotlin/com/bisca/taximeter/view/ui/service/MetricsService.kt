@@ -8,7 +8,7 @@ import android.location.Location
 import android.os.Handler
 import android.os.SystemClock
 import android.support.v4.app.NotificationCompat
-import android.util.Log
+import com.bisca.taximeter.data.logger.Logger
 import com.bisca.taximeter.data.model.Ride
 import com.bisca.taximeter.data.repository.RideRepository
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
@@ -106,7 +106,7 @@ class MetricsService : Service() {
   }
 
   private fun locationReceived(location: Location) {
-    Log.d(TAG, "Position Received ${location.toString()}")
+    Logger.debug(TAG, "Position Received ${location.toString()}")
 
     val distanceMoved = calculateDistance(location)
 
@@ -145,25 +145,25 @@ class MetricsService : Service() {
   }
 
   private fun startIdleChecker(expectedSecondsToNextPosition: Int) {
-    Log.d(TAG, "Expected Position in $expectedSecondsToNextPosition seconds")
+    Logger.debug(TAG, "Expected Position in $expectedSecondsToNextPosition seconds")
     handler.removeCallbacksAndMessages(null)
     handler.postDelayed({
       if (!rideMetrics.hasBecomeIdle()) {
-        Log.d(TAG, "Idle Checker")
+        Logger.debug(TAG, "Idle Checker")
         userStopped()
       }
     }, expectedSecondsToNextPosition * 1000L)
   }
 
   private fun userStopped() {
-    Log.d(TAG, "User is idle")
+    Logger.debug(TAG, "User is idle")
 
     rideMetrics.startedIdle(SystemClock.elapsedRealtime())
     speedSubject.onNext(0f)
   }
 
   private fun userMoved(distanceMoved: Double, location: Location) {
-    Log.d(TAG, "User is moving ${location.speed}m/s")
+    Logger.debug(TAG, "User is moving ${location.speed}m/s")
 
     if (rideMetrics.hasBecomeIdle()) {
       computeIdleTime()
@@ -191,7 +191,7 @@ class MetricsService : Service() {
 
     rideMetrics.meters.set(computedDistance)
 
-    Log.d(TAG, "Computed Distance $computedDistance")
+    Logger.debug(TAG, "Computed Distance $computedDistance")
   }
 
   private fun computeIdleTime() {
@@ -204,7 +204,7 @@ class MetricsService : Service() {
     val computedIdleSeconds = currentIdleSeconds.plus(newIdleSeconds)
     rideMetrics.idleSeconds.set(computedIdleSeconds)
 
-    Log.d(TAG, "Computing Idle, adding $newIdleSeconds seconds")
+    Logger.debug(TAG, "Computing Idle, adding $newIdleSeconds seconds")
   }
 
   private fun stopIdlingTime() {

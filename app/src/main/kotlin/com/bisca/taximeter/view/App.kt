@@ -1,6 +1,7 @@
 package com.bisca.taximeter.view
 
 import android.app.Application
+import com.bisca.taximeter.data.logger.Logger
 import com.bisca.taximeter.di.component.ApplicationComponent
 import com.bisca.taximeter.di.component.DaggerApplicationComponent
 import com.bisca.taximeter.di.module.AndroidModule
@@ -11,6 +12,7 @@ class App : Application() {
 
   override fun onCreate() {
     super.onCreate()
+    Logger.init()
     initInjectionGraph()
   }
 
