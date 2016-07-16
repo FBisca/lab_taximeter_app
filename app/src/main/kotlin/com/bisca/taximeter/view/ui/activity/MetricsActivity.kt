@@ -12,17 +12,13 @@ import android.widget.ImageView
 import android.widget.TextView
 import com.bisca.taximeter.R
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
-import com.bisca.taximeter.extensions.defaultLocale
 import com.bisca.taximeter.extensions.getComponent
 import com.bisca.taximeter.view.ui.LocationManager
 import com.bisca.taximeter.view.ui.activity.base.BaseActivity
 import com.bisca.taximeter.view.ui.service.MetricsService
-import rx.Subscription
 import rx.android.schedulers.AndroidSchedulers
 import rx.subscriptions.CompositeSubscription
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
