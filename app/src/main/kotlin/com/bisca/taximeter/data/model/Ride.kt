@@ -4,27 +4,30 @@ import android.os.Parcel
 import android.os.Parcelable
 
 class Ride(
-    val taximeter: Double,
-    val totalMeters: Float,
-    val idleSeconds: Long,
-    val baseFare: Double,
-    val durationInSeconds: Long
+    var state: RideState
 ) : Parcelable {
 
+  var taximeter: Float = 0f
+  var totalMeters: Float = 0f
+  var idleSeconds: Long = 0L
+  var baseFare: Float = 0f
+  var durationInSeconds: Long = 0L
+
   constructor(parcel: Parcel)
-  : this(
-      parcel.readDouble(),
-      parcel.readFloat(),
-      parcel.readLong(),
-      parcel.readDouble(),
-      parcel.readLong()
-  )
+  : this(parcel.readSerializable() as RideState) {
+    taximeter = parcel.readFloat()
+    totalMeters = parcel.readFloat()
+    idleSeconds = parcel.readLong()
+    baseFare = parcel.readFloat()
+    durationInSeconds = parcel.readLong()
+  }
 
   override fun writeToParcel(dest: Parcel?, flags: Int) {
-    dest?.writeDouble(taximeter)
+    dest?.writeSerializable(state)
+    dest?.writeFloat(taximeter)
     dest?.writeFloat(totalMeters)
     dest?.writeLong(idleSeconds)
-    dest?.writeDouble(baseFare)
+    dest?.writeFloat(baseFare)
     dest?.writeLong(durationInSeconds)
   }
 
@@ -40,4 +43,8 @@ class Ride(
       }
     }
   }
+}
+
+enum class RideState {
+  FOR_HIRE, HIRED, STOPPED
 }

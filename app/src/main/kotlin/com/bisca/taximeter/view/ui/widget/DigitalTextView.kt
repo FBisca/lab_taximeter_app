@@ -14,7 +14,7 @@ class DigitalTextView : AppCompatTextView {
       defAttr: Int = 0
   ) : super(context, attributeSet, defAttr) {
     if (!isInEditMode) {
-      typeface = Typeface.createFromAsset(context.assets, "digital_font.ttf")
+      typeface = Typeface.createFromAsset(context.assets, "digital_font_new.ttf")
     }
   }
 

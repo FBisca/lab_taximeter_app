@@ -5,33 +5,29 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.location.Location
-import android.os.Handler
 import android.os.SystemClock
 import android.support.v4.app.NotificationCompat
 import com.bisca.taximeter.data.logger.Logger
-import com.bisca.taximeter.data.model.Ride
+import com.bisca.taximeter.data.model.RideMetrics
+import com.bisca.taximeter.data.model.RideState
+import com.bisca.taximeter.data.model.UserLocation
 import com.bisca.taximeter.data.repository.RideRepository
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.calculateDistance
 import com.bisca.taximeter.extensions.getComponent
-import com.bisca.taximeter.view.ui.LocationManager
 import com.bisca.taximeter.view.ui.activity.MetricsActivity
+import com.bisca.taximeter.view.ui.location.LocationManager
 import rx.Observable
 import rx.Subscription
-import rx.subjects.PublishSubject
 import java.util.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
+import kotlin.concurrent.scheduleAtFixedRate
 
 class MetricsService : Service() {
 
   companion object {
     val TAG: String = MetricsService::class.java.simpleName
-
-    const val INITIAL_POINT = "none"
 
     fun getIntent(context: Context): Intent {
       return Intent(context, MetricsService::class.java)
@@ -46,17 +42,8 @@ class MetricsService : Service() {
   @Inject
   lateinit var locationManager: LocationManager
 
-  val lastPoint = Location(INITIAL_POINT)
   val rideMetrics = RideMetrics()
-
-  val speedSubject: PublishSubject<Float> = PublishSubject.create<Float>()
-
-  val handler = Handler()
-
-  var currentState = State.FOR_HIRE
-
-  var initialDate: Long = 0L
-
+  val timer = Timer()
   var locationsSubscription: Subscription? = null
 
   override fun onCreate() {
@@ -67,13 +54,13 @@ class MetricsService : Service() {
   override fun onBind(intent: Intent?) = binder
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    if (currentState == State.FOR_HIRE) {
-      initialDate = System.currentTimeMillis()
+    if (rideMetrics.getState() == RideState.FOR_HIRE) {
 
       showRunningNotification()
       startListeningForLocations()
+      startListeningForTimeTicks()
 
-      currentState = State.HIRED
+      rideMetrics.hired()
     }
 
     return START_STICKY
@@ -81,9 +68,9 @@ class MetricsService : Service() {
 
   override fun onDestroy() {
     super.onDestroy()
-    handler.removeCallbacksAndMessages(null)
     removeRunningNotification()
     stopListeningForLocations()
+    stopListeningForTimeTicks()
   }
 
   private fun initInjection() {
@@ -94,8 +81,7 @@ class MetricsService : Service() {
   }
 
   private fun startListeningForLocations() {
-    locationsSubscription = locationManager.stream()
-        .retry()
+    locationsSubscription = locationManager.get()
         .subscribe { location ->
           locationReceived(location)
         }
@@ -105,118 +91,117 @@ class MetricsService : Service() {
     locationsSubscription?.unsubscribe()
   }
 
+  private fun startListeningForTimeTicks() {
+    timer.scheduleAtFixedRate(1000, 1000, {
+      rideMetrics.appendSecond()
+      if (rideMetrics.hasBecomeIdle()) {
+        rideMetrics.appendIdleSecond()
+      }
+    })
+  }
+
+  private fun stopListeningForTimeTicks() {
+    timer.cancel()
+  }
+
   private fun locationReceived(location: Location) {
     Logger.debug(TAG, "Position Received ${location.toString()}")
 
-    val distanceMoved = calculateDistance(location)
+    val userLocation = convertToUserLocation(location)
 
-    if (filterLocation(location)) {
-      if (checkIfUserIsMoving(distanceMoved, location, lastPoint)) {
-        userMoved(distanceMoved, location)
+    Logger.debug(TAG, "Position Converted ${userLocation.toString()}")
+
+    if (filterLocation(userLocation)) {
+      if (checkIfUserIsMoving(userLocation)) {
+        userMoved(userLocation)
       } else {
         userStopped()
       }
-    }
 
-    lastPoint.set(location)
-  }
-
-  private fun calculateDistance(location: Location): Double {
-    return when {
-      location.provider.equals(INITIAL_POINT) -> 0.0
-      else -> location.calculateDistance(lastPoint)
+      rideMetrics.updateSpeed(userLocation.speed)
+      if (rideMetrics.route.isEmpty() || userLocation.distanceMoved > 10) {
+        rideMetrics.appendRoute(userLocation)
+      }
     }
   }
 
-  private fun checkIfUserIsMoving(distanceMoved: Double, newLocation: Location, compareLocation: Location): Boolean {
-    if (newLocation.hasSpeed() && newLocation.speed > 1f) {
+  private fun convertToUserLocation(location: Location): UserLocation {
+    val lastUserLocation = rideMetrics.route.lastOrNull()
+
+    val distance = calculateDistance(location, lastUserLocation)
+    val speed = calculateSpeed(location, distance, lastUserLocation)
+
+    return UserLocation(
+        location.latitude,
+        location.longitude,
+        SystemClock.elapsedRealtime(),
+        speed,
+        location.accuracy,
+        distance
+    )
+  }
+
+  private fun calculateSpeed(location: Location, distance: Double, lastUserLocation: UserLocation?): Float {
+    if (location.hasSpeed()) {
+      return location.speed
+    } else {
+      if (lastUserLocation == null) return 0f
+
+      val elapsedTime = SystemClock.elapsedRealtime() - lastUserLocation.elapsedTime
+      val elapsedSeconds = elapsedTime / 1000
+
+      if (elapsedSeconds > 0) {
+        return (distance / elapsedSeconds).toFloat()
+      } else {
+        return 0f
+      }
+    }
+  }
+
+  private fun calculateDistance(location: Location, lastUserLocation: UserLocation?): Double {
+    return when (lastUserLocation) {
+      null -> 0.0
+      else -> location.calculateDistance(lastUserLocation.latitude, lastUserLocation.longitude)
+    }
+  }
+
+  private fun checkIfUserIsMoving(userLocation: UserLocation): Boolean {
+    if (userLocation.speed > 1) {
       return true
+    } else {
+      return false
     }
-
-    val diffTime = newLocation.time - compareLocation.time
-    if (diffTime > 0) {
-      val metersPerSeconds = distanceMoved / (diffTime / 1000)
-      if (metersPerSeconds > 1f) {
-        newLocation.speed = metersPerSeconds.toFloat()
-      }
-    }
-
-    return false
-  }
-
-  private fun startIdleChecker(expectedSecondsToNextPosition: Int) {
-    Logger.debug(TAG, "Expected Position in $expectedSecondsToNextPosition seconds")
-    handler.removeCallbacksAndMessages(null)
-    handler.postDelayed({
-      if (!rideMetrics.hasBecomeIdle()) {
-        Logger.debug(TAG, "Idle Checker")
-        userStopped()
-      }
-    }, expectedSecondsToNextPosition * 1000L)
   }
 
   private fun userStopped() {
-    Logger.debug(TAG, "User is idle")
-
-    rideMetrics.startedIdle(SystemClock.elapsedRealtime())
-    speedSubject.onNext(0f)
+    if (!rideMetrics.hasBecomeIdle()) {
+      Logger.debug(TAG, "User is idle")
+      rideMetrics.startedIdle()
+    }
   }
 
-  private fun userMoved(distanceMoved: Double, location: Location) {
-    Logger.debug(TAG, "User is moving ${location.speed}m/s")
+  private fun userMoved(userLocation: UserLocation) {
+    Logger.debug(TAG, "User is moving ${userLocation.speed}m/s")
 
     if (rideMetrics.hasBecomeIdle()) {
-      computeIdleTime()
-      stopIdlingTime()
+      rideMetrics.stopIdle()
     }
 
-    computeDistance(distanceMoved.toFloat())
-
-    val timeToNextPosition = (locationManager.locationRequest.smallestDisplacement / location.speed) * 4
-
-    startIdleChecker(Math.ceil(timeToNextPosition.toDouble()).toInt())
-
-    val kilometerPerHour = location.speed * 3.6
-    speedSubject.onNext(kilometerPerHour.toFloat())
+    rideMetrics.computeDistance(userLocation.distanceMoved.toFloat())
   }
 
-  private fun computeDistance(distanceMoved: Float) {
-    if (lastPoint.provider.equals(INITIAL_POINT)) {
-      return
-    }
 
-    val currentMeters = rideMetrics.meters.get()
-
-    val computedDistance = distanceMoved.plus(currentMeters)
-
-    rideMetrics.meters.set(computedDistance)
-
-    Logger.debug(TAG, "Computed Distance $computedDistance")
-  }
-
-  private fun computeIdleTime() {
-    val currentIdleSeconds = rideMetrics.idleSeconds.get()
-
-    val currentTime = SystemClock.elapsedRealtime()
-    val newIdleTime = currentTime.minus(rideMetrics.idleStartedTime.getAndSet(currentTime))
-    val newIdleSeconds = Math.round(newIdleTime.div(1000.0)) // To Seconds
-
-    val computedIdleSeconds = currentIdleSeconds.plus(newIdleSeconds)
-    rideMetrics.idleSeconds.set(computedIdleSeconds)
-
-    Logger.debug(TAG, "Computing Idle, adding $newIdleSeconds seconds")
-  }
-
-  private fun stopIdlingTime() {
-    rideMetrics.stopIdle()
-  }
-
-  private fun filterLocation(location: Location): Boolean {
-    if (lastPoint.provider.equals(INITIAL_POINT)) {
+  private fun filterLocation(location: UserLocation): Boolean {
+    if (rideMetrics.route.isEmpty()) {
       return true
     }
 
-    if (location.distanceTo(lastPoint) < 100) {
+    if (location.distanceMoved in 5 .. 100) {
+      return true
+    }
+
+    val elapsed = location.elapsedTime - rideMetrics.route.last().elapsedTime
+    if (elapsed > 15000 && location.accuracy < 100) {
       return true
     }
 
@@ -241,74 +226,38 @@ class MetricsService : Service() {
 
   inner class Binder : android.os.Binder() {
 
-    fun isRunningRide() = currentState != State.FOR_HIRE
-
-    fun getState() = currentState
-
-    fun nextState(): State {
-      return when (currentState) {
-        State.HIRED -> {
+    @Suppress("NON_EXHAUSTIVE_WHEN")
+    fun nextState() {
+      when (rideMetrics.getState()) {
+        RideState.HIRED -> {
+          rideMetrics.stopped()
           stopListeningForLocations()
-          currentState = State.STOPPED
-          State.STOPPED
+          stopListeningForTimeTicks()
         }
 
-        State.STOPPED -> {
+        RideState.STOPPED -> {
           stopSelf()
-          State.FOR_HIRE
         }
-
-        else -> currentState
-
       }
     }
 
-    fun getTaximeterStream(interval: Long, timeUnit: TimeUnit): Observable<Ride> {
-      return Observable.interval(0L, interval, timeUnit)
+    fun getRideMetricsStream(): Observable<RideMetrics> {
+      return Observable.interval(0L, 1L, TimeUnit.SECONDS)
           .onBackpressureLatest()
+          .map { rideMetrics }
+    }
+
+    fun getTaximeterStream(interval: Long, timeUnit: TimeUnit): Observable<Float> {
+      return Observable.interval(0L, interval, timeUnit)
           .map {
-            if (currentState == State.HIRED && rideMetrics.hasBecomeIdle()) {
-              computeIdleTime()
-            }
-
-            rideRepository.calculateRide(Date(initialDate), rideMetrics.meters.get(), rideMetrics.idleSeconds.get())
+            rideRepository.calculateTaximeter(
+                rideMetrics.meters.get(),
+                rideMetrics.idleSeconds.get()
+            )
           }
-    }
 
-    fun getSpeedStream(): Observable<Float> {
-      return speedSubject.onBackpressureLatest()
-    }
-
-    fun getTimeStream(): Observable<Long> {
-      return Observable.interval(0, 1L, TimeUnit.SECONDS)
-        .onBackpressureLatest()
-        .map {
-          System.currentTimeMillis() - initialDate
-        }
     }
   }
 
-  class RideMetrics() {
-    val idleStartedTime = AtomicLong(0)
-    val meters = AtomicReference<Float>(0F)
-    val idleSeconds = AtomicLong(0)
-    private val becomeIdle = AtomicBoolean()
 
-    fun startedIdle(time: Long) {
-      becomeIdle.set(true)
-      idleStartedTime.set(time)
-    }
-
-    fun stopIdle() {
-      becomeIdle.set(false)
-      idleStartedTime.set(0)
-    }
-
-    fun hasBecomeIdle() = becomeIdle.get()
-
-  }
-
-  enum class State {
-    FOR_HIRE, HIRED, STOPPED
-  }
 }

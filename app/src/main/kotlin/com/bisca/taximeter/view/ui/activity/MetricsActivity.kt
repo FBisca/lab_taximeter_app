@@ -11,10 +11,12 @@ import android.support.v4.graphics.drawable.DrawableCompat
 import android.widget.ImageView
 import android.widget.TextView
 import com.bisca.taximeter.R
+import com.bisca.taximeter.data.model.RideState
 import com.bisca.taximeter.di.component.DaggerMetricsComponent
 import com.bisca.taximeter.extensions.getComponent
-import com.bisca.taximeter.view.ui.LocationManager
 import com.bisca.taximeter.view.ui.activity.base.BaseActivity
+import com.bisca.taximeter.view.ui.location.LocationManager
+import com.bisca.taximeter.view.ui.location.LocationManagerException
 import com.bisca.taximeter.view.ui.service.MetricsService
 import rx.android.schedulers.AndroidSchedulers
 import rx.subscriptions.CompositeSubscription
@@ -74,20 +76,38 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
   override fun onServiceConnected(componentName: ComponentName?, binder: IBinder?) {
     metricsBinder = binder as MetricsService.Binder?
     metricsBinder?.let {
-      displayState(it.getState())
-      if (it.isRunningRide()) {
-        connectToTaximeterStream(it)
-        connectToSpeedStream(it)
-        connectToTimeStream(it)
-      }
+
+      compositeSubscription.add(
+          it.getRideMetricsStream()
+              .observeOn(AndroidSchedulers.mainThread())
+              .subscribe { rideMetrics ->
+                displaySpeed(rideMetrics.kilometersPerHour.get())
+                displayTime(rideMetrics.durationInSeconds.get())
+              }
+      )
+
+      val (interval, timeUnit) = TAXIMETER_INTERVAL
+      compositeSubscription.add(
+          it.getTaximeterStream(interval, timeUnit)
+          .observeOn(AndroidSchedulers.mainThread())
+          .subscribe { taximeter ->
+            displayTaximeter(taximeter)
+          }
+      )
     }
   }
 
-  private fun displayState(state: MetricsService.State) {
-    when (state) {
-      MetricsService.State.FOR_HIRE -> {
-        unregisterService()
+  private fun displaySpeed(kilometersPerHour: Float) {
+    textSpeed.text = String.format("%d", kilometersPerHour.toInt())
+  }
 
+  override fun onServiceDisconnected(componentName: ComponentName?) {
+
+  }
+
+  private fun displayState(state: RideState) {
+    when (state) {
+      RideState.FOR_HIRE -> {
         textStatus.text = "DISPONIVEL"
         textStatus.setTextColor(ContextCompat.getColor(this, R.color.greenLed))
 
@@ -95,63 +115,35 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
         textTime.text = "00:00"
         textValue.text = "0.00"
       }
-      MetricsService.State.HIRED -> {
+
+      RideState.HIRED -> {
         textStatus.text = "OCUPADO"
         textStatus.setTextColor(ContextCompat.getColor(this, R.color.redLed))
       }
-      MetricsService.State.STOPPED -> {
+
+      RideState.STOPPED -> {
         textStatus.text = "PARADO"
         textStatus.setTextColor(ContextCompat.getColor(this, R.color.redLed))
       }
     }
   }
 
-  private fun connectToSpeedStream(binder: MetricsService.Binder) {
-    compositeSubscription.add(
-        binder.getSpeedStream()
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { kilometersPerHour ->
-              textSpeed.text = String.format("%d", kilometersPerHour.toInt())
-            }
-    )
-  }
-
-  private fun connectToTimeStream(binder: MetricsService.Binder) {
+  private fun displayTime(seconds: Long) {
     val format = NumberFormat.getInstance()
     format.minimumIntegerDigits = 2
 
-    compositeSubscription.add(
-        binder.getTimeStream()
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { millisecondsPassed ->
-              val seconds = millisecondsPassed / 1000
-
-              val minutes = (seconds / 60) % 60
-              val hours = (seconds / 60) / 60
-              if (hours == 0L) {
-                val currentSeconds = seconds % 60
-                textTime.text = String.format("%s:%s", format.format(minutes), format.format(currentSeconds))
-              } else {
-                textTime.text = String.format("%s:%s", format.format(hours), format.format(minutes))
-              }
-            }
-    )
+    val minutes = (seconds / 60) % 60
+    val hours = (seconds / 60) / 60
+    if (hours == 0L) {
+      val currentSeconds = seconds % 60
+      textTime.text = String.format("%s:%s", format.format(minutes), format.format(currentSeconds))
+    } else {
+      textTime.text = String.format("%s:%s", format.format(hours), format.format(minutes))
+    }
   }
 
-
-  private fun connectToTaximeterStream(binder: MetricsService.Binder) {
-    val (interval, timeUnit) = TAXIMETER_INTERVAL
-    compositeSubscription.add(
-        binder.getTaximeterStream(interval, timeUnit)
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { ride ->
-              textValue.text = String.format("%.2f", ride.taximeter)
-            }
-    )
-  }
-
-  override fun onServiceDisconnected(componentName: ComponentName?) {
-
+  private fun displayTaximeter(taximeter: Float) {
+    textValue.text = String.format("%.2f", taximeter)
   }
 
   private fun initActivity() {
@@ -159,28 +151,24 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
     DrawableCompat.setTint(drawable, ContextCompat.getColor(this, R.color.greenLed))
 
     buttonAction.setOnClickListener {
-      metricsBinder.let {
-        if (it != null && it.isRunningRide()) {
-          displayState(it.nextState())
-        } else {
-          connectToLocations()
-        }
-      }
+      connectToLocations()
     }
   }
 
   private fun connectToLocations() {
     compositeSubscription.add(
-        locationManager.stream().first().subscribe(
-            { location ->
-              startMetricsService()
-            },
-            { error ->
-              if (error is LocationManager.LocationManagerException && error.hasSolution()) {
-                error.startActivityForSolution(this, REQUEST_LOCATION_SOLUTION)
-              }
-            }
-        )
+        locationManager.resetIfHasErrors().get()
+            .first()
+            .subscribe(
+                { location ->
+                  startMetricsService()
+                },
+                { error ->
+                  if (error is LocationManagerException && error.hasSolution()) {
+                    error.startActivityForSolution(this, REQUEST_LOCATION_SOLUTION)
+                  }
+                }
+            )
     )
   }
 
