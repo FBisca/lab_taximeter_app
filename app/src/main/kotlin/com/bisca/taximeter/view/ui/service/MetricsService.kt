@@ -123,19 +123,18 @@ class MetricsService : Service() {
       }
 
       rideMetrics.updateSpeed(userLocation.speed)
-      if (rideMetrics.route.isEmpty() || userLocation.distanceMoved > 10) {
-        rideMetrics.appendRoute(userLocation)
-      }
+      rideMetrics.appendRoute(userLocation)
+      rideMetrics.appendRecentLocation(userLocation)
     }
 
     rideMetrics.updateAccuracy(userLocation.accuracy)
   }
 
   private fun convertToUserLocation(location: Location): UserLocation {
-    val lastUserLocation = rideMetrics.route.lastOrNull()
+    val lastRecentLocation = rideMetrics.recentLocations.lastOrNull()
 
-    val distance = calculateDistance(location, lastUserLocation)
-    val speed = calculateSpeed(location, distance, lastUserLocation)
+    val distance = calculateDistance(location, lastRecentLocation)
+    val speed = calculateSpeed(location, distance, lastRecentLocation)
 
     return UserLocation(
         location.latitude,
@@ -148,7 +147,7 @@ class MetricsService : Service() {
   }
 
   private fun calculateSpeed(location: Location, distance: Double, lastUserLocation: UserLocation?): Float {
-    if (location.hasSpeed()) {
+    if (location.hasSpeed() && location.speed > 1) {
       return location.speed
     } else {
       if (lastUserLocation == null) return 0f

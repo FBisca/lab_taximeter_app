@@ -13,6 +13,7 @@ class RideMetrics() {
   val accuracy = AtomicReference<Float>(0F)
   val idleSeconds = AtomicLong(0)
   val durationInSeconds = AtomicLong(0)
+  val recentLocations = mutableListOf<UserLocation>()
   val route = mutableListOf<UserLocation>()
 
   private val becomeIdle = AtomicBoolean()
@@ -62,10 +63,19 @@ class RideMetrics() {
   }
 
   fun appendRoute(userLocation: UserLocation) {
-    route.add(userLocation)
+    if (route.isEmpty() || userLocation.distanceMoved > 10) {
+      route.add(userLocation)
+    }
   }
 
   fun appendSecond() {
     durationInSeconds.incrementAndGet()
+  }
+
+  fun appendRecentLocation(userLocation: UserLocation) {
+    if (recentLocations.size >= 5) {
+      recentLocations.removeAt(0)
+    }
+    recentLocations.add(userLocation)
   }
 }
