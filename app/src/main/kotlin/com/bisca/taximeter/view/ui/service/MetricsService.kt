@@ -155,11 +155,17 @@ class MetricsService : Service() {
       val elapsedTime = SystemClock.elapsedRealtime() - lastUserLocation.elapsedTime
       val elapsedSeconds = elapsedTime / 1000
 
-      if (elapsedSeconds > 0) {
-        return (distance / elapsedSeconds).toFloat()
+      val speed = if (elapsedSeconds > 0) {
+        (distance / elapsedSeconds).toFloat()
       } else {
-        return 0f
+        0f
       }
+
+      if (speed > 1) {
+        return speed
+      }
+
+      return 0f
     }
   }
 
@@ -201,7 +207,7 @@ class MetricsService : Service() {
       return true
     }
 
-    if (location.distanceMoved in 5 .. 100) {
+    if (location.distanceMoved <= 100) {
       return true
     }
 

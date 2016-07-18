@@ -1,5 +1,6 @@
 package com.bisca.taximeter.data.model
 
+import android.os.SystemClock
 import com.bisca.taximeter.data.logger.Logger
 import com.bisca.taximeter.view.ui.service.MetricsService
 import java.util.concurrent.atomic.AtomicBoolean
@@ -59,7 +60,18 @@ class RideMetrics() {
   }
 
   fun updateSpeed(speed: Float) {
-    kilometersPerHour.set(speed * 3.6f)
+    if (speed == 0f) {
+      kilometersPerHour.set(speed * 3.6f)
+    } else {
+      val currentTime = SystemClock.elapsedRealtime()
+      val locations = recentLocations.filter {
+        it.speed != 0f && (currentTime - it.elapsedTime) < 5000
+      }
+
+      val averageSpeed = locations.sumByDouble { it.speed.toDouble() }.div(locations.size)
+      kilometersPerHour.set(averageSpeed.toFloat() * 3.6f)
+    }
+
   }
 
   fun appendRoute(userLocation: UserLocation) {

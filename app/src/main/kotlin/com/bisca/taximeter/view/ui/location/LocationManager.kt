@@ -26,7 +26,7 @@ class LocationManager(val context: Context) {
 
   private val locationRequest: LocationRequest = LocationRequest.create()
       .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-      .setInterval(5000)
+      .setInterval(1000)
       .setMaxWaitTime(5000)
       .setFastestInterval(1000)
 

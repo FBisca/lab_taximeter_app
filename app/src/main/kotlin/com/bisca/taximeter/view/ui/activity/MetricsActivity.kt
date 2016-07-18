@@ -90,6 +90,7 @@ class MetricsActivity : BaseActivity(), ServiceConnection {
           it.getRideMetricsStream()
               .observeOn(AndroidSchedulers.mainThread())
               .subscribe { rideMetrics ->
+                displayState(rideMetrics.getState())
                 displaySpeed(rideMetrics.kilometersPerHour.get())
                 displayTime(rideMetrics.durationInSeconds.get())
                 displaySignal(rideMetrics.accuracy.get())
