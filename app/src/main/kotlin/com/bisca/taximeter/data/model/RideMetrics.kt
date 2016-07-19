@@ -68,8 +68,13 @@ class RideMetrics() {
         it.speed != 0f && (currentTime - it.elapsedTime) < 5000
       }
 
-      val averageSpeed = locations.sumByDouble { it.speed.toDouble() }.div(locations.size)
-      kilometersPerHour.set(averageSpeed.toFloat() * 3.6f)
+      if (locations.isEmpty()) {
+        kilometersPerHour.set(speed * 3.6f)
+      } else {
+
+        val averageSpeed = locations.sumByDouble { it.speed.toDouble() }.div(locations.size)
+        kilometersPerHour.set(averageSpeed.toFloat() * 3.6f)
+      }
     }
 
   }
